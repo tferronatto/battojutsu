@@ -13,20 +13,23 @@ states.result={}
 states.gameover={}
 
 function _init()
-  state="menu"
-  defeated=0
-  for k,v in pairs(states) do
-    v:init()
-  end 
+	state="menu"
+ defeated=0
+ for k,v in pairs(states) do
+ 	v:init()
+ end 
 end
 
 function _update60()
-  states[state]:update()
-  update_clouds(clouds)
+	states[state]:update()
+	update_clouds(clouds)
 end
 
 function _draw()
-  states[state]:draw()
+	cls()
+	draw_bg()
+	draw_clouds()
+ states[state]:draw()
 end
 
 function update_state()
@@ -38,250 +41,253 @@ end
 -->8
 -- title screen/menu --
 function states.menu:init()
-  self.next_state="play"
-  clouds=init_clouds(2)
-  flash=0
-  enemy_life=1
-  enemy_reaction=30
-  p1=make_player(30,1,1,5)
-  p2=make_player(90,3,enemy_reaction,enemy_life)
-  music(0)
+ self.next_state="play"
+ clouds=init_clouds(2)
+ flash=0
+ enemy_life=1
+ enemy_reaction=30
+ p1=make_player(30,1,1,5)
+ p2=make_player(90,3,enemy_reaction,enemy_life)
+ music(0)
 end
 
 function states.menu:update()
-  ui_text=msg.start
-  if btnp(5) then
-     music(-1,2000)
-    update_state()
-  end
+ ui_text=msg.start
+ if btnp(5) then
+	 music(-1,2000)
+  update_state()
+ end
 end
 
 function states.menu:draw()
-  cls()
-  draw_bg()
-  draw_clouds(clouds)
-  spr(32,8,46,14,2)
-  spr(16,60,76)
-  print("a quickdraw sword duel",22,64,1)
-  print(ui_text,hcenter(ui_text),112,7)
+	spr(32,8,46,14,2)
+ spr(16,60,76)
+ print("a quickdraw sword duel",22,64,1)
+ print(ui_text,hcenter(ui_text),112,7)
 end
 -->8
 -- play state --
 function states.play:init()
-  self.next_state="result"
-  wait_time=load_wait_timer(240)
-  can_attack=false
+	self.next_state="result"
+ wait_time=load_wait_timer(240)
+ can_attack=false
 end
 
 function states.play:update()
-  if wait_time>0 and can_attack==false then
-    wait_time-=1
-    ui_text=msg.wait
-  else
-    can_attack=true
-    sfx(5)
-    ui_text=msg.attack
+	if btnp(❎) or p1.t>p2.reaction then
+		if can_attack then
+			flash=3
+			p1.sp=p1.sp_attack
+			p2.sp=p2.sp_attack
+			swap_position(p1,p2)
+			sfx(2)
+			wait_time=240
+		else
+			p1.sp=p1.sp_dead
+			wait_time=60
+			sfx(3)	
 		end
-
-  if can_attack then
-    if btnp(5) or p1.t>p2.reaction then
-      flash=3
-      can_attack=false
-      p1.sp=p1.sp_attack
-      p2.sp=p2.sp_attack
-      swap_position(p1,p2)
-      wait_time=240
-      sfx(2)
-      show_result=false
-      update_state()
-    else
-      p1.t+=1
-    end
-  end
+		show_result=false
+		update_state()
+	end
+	
+	if wait_time>0 then
+		wait_time-=1
+		ui_text=msg.wait
+	else
+		can_attack=true
+		p1.t+=1
+		ui_text=msg.attack
+	end
 end
 
 function states.play:draw()
-  cls()
-  draw_bg()
-  draw_clouds(clouds)
-   
-  draw_player(p1)
-  draw_player(p2)
+ draw_player(p1)
+ draw_player(p2)
+ 
+ if can_attack then
+	 spr(6,60,57,1,2)
+  print("❎",p1.x,p1.y-7,1)
+ end
   
-  if can_attack then
-    spr(6,60,57,1,2)
-    print("❎",p1.x,p1.y-7,1)
-  end
-  
-  draw_lifebars()
-  draw_msgbox()
-  print(ui_text,92,112,7)
+ draw_lifebars()
+ draw_msgbox()
+ print(ui_text,92,112,7)
 end
 -->8
 -- result state --
 function states.result:init()
-  self.next_state="gameover"
+ self.next_state="gameover"
 end
 
 function states.result:update()
-  if flash>0 then
-    flash-=1
-  end
+ if flash>0 then
+	 flash-=1
+ end
 
-  if wait_time>0 then
-    wait_time-=1
-  elseif show_result==false then
-    show_result=true
-  end
+ if wait_time>0 then
+	 wait_time-=1
+ elseif show_result==false then
+	 show_result=true
+ end
 
-  if show_result then
-    local finish=check_result(p1,p2)
-    if finish then
-      sfx(3)
-      if p1.life>0 then music(0)
-      else music(1) end
-      update_state()
-    else
-      state="play"
-      init_combat()
-    end
+ if show_result then
+  local finish=check_result(p1,p2)
+  if finish then
+ 	 sfx(3)
+   if p1.life>0 then
+    music(0)
+   else
+    music(1)
+   end
+   update_state()
+  else
+   state="play"
+   init_combat()
   end
+ end
 end
 
 function states.result:draw()
-  if flash>0 then
-    cls(7)
-    spr(5,60,76)
+ if flash>0 then
+	 cls(7)
+	 spr(5,60,76)
+ else
+	 draw_player(p1)
+  draw_player(p2)
+
+  draw_lifebars()
+  draw_msgbox()
+  
+  if can_attack then
+ 	 print(msg.reaction,88,105,7)
+  	print(flr(p1.t*16.67).."ms",93,117,7)
   else
-    cls()
-    draw_bg()
-    draw_clouds(clouds)
-
-    draw_player(p1)
-    draw_player(p2)
-
-    draw_lifebars()
-    draw_msgbox()
-    print("reaction",88,105,7)
-    print("time:",94,111,7)
-    print(flr(p1.t*16.67).."ms",93,117,7)
+  	print(msg.fault,92,112,7)
   end
+ end
 end
 -->8
 -- game over/continue state-- 
 function  states.gameover:init()
-  self.next_state="menu"
+ self.next_state="menu"
 end
 
 function states.gameover:update()
-  if p1.life>0 then
-    ui_text=msg.continue
-    if btnp(5) then
-      next_combat()
-      music(-1,2000)
-      state="play"
-    end
-  else
-    if btnp(4) then
-      _init()
-    end
-    ui_text=msg.reset
+ if p1.life>0 then
+	 ui_text=msg.continue
+  if btnp(5) then
+ 	 next_combat()
+   music(-1,2000)
+   state="play"
   end
+ else
+	 if btnp(4) then
+ 	 _init()
+	 end
+  ui_text=msg.reset
+ end
 end
 
 function states.gameover:draw()
-  cls()
-  draw_bg()
-  draw_clouds(clouds)
-  draw_player(p1)
-  draw_player(p2)
+	draw_player(p1)
+ draw_player(p2)
 
-  if p1.life<=0 then
-    print(msg.gameover,hcenter(msg.gameover),54,1)
-    print(msg.score..defeated,hcenter(msg.score),60,1)
-  end
+	if p1.life<=0 then
+ 	print(msg.gameover,hcenter(msg.gameover),54,1)
+  print(msg.score..defeated,hcenter(msg.score)-4,60,1)
+ end
   print(ui_text,hcenter(ui_text),110,7)
 end
-
 -->8
 --player control --
 function make_player(x,sp,t,life)
-  local p={}
-    p.x=x
-    p.y=76
-    p.sp_idle=sp
-    p.sp_attack=sp+1
-    p.sp_dead=sp+16
-    p.sp=p.sp_idle
-    p.t=0
-    p.flip=false
-    p.reaction=t or nil
-    p.life=life or 1
-    p.col=8
-    p.pall={8,10,3,13,14}
-  return p
+ local p={}
+	 p.x=x
+  p.y=76
+  p.sp_idle=sp
+  p.sp_attack=sp+1
+  p.sp_dead=sp+16
+  p.sp=p.sp_idle
+  p.t=0
+  p.flip=false
+  p.reaction=t or nil
+  p.life=life or 1
+  p.col=8
+  p.pall={8,10,3,13,14}
+ return p
 end
 
 function draw_player(p)
-		pal(8,p.col)
-  spr(p.sp,p.x,p.y,1,1,p.flip,false)
-  pal()
+	pal(8,p.col)
+ spr(p.sp,p.x,p.y,1,1,p.flip,false)
+ pal()
 end
 
 function swap_position(a,b)
-  local pos1,pos2=a.x,b.x
-  a.x=pos2
-  b.x=pos1
+ local pos1,pos2=a.x,b.x
+ a.x=pos2
+ b.x=pos1
 end
 
 function init_combat()
-  can_attack = false
-  wait_time=load_wait_timer(240)
-  p1.t=0
+ can_attack=false
+ wait_time=load_wait_timer(240)
+ p1.t=0
 end
 
 function next_combat()
-  enemy_reaction-=1
-  if enemy_life<6 then enemy_life+=1 end
-  p1=make_player(30,1,0,p1.life)
-  p2=make_player(90,3,enemy_reaction,enemy_life)
+ enemy_reaction-=1
+ if enemy_life<6 then enemy_life+=1 end
+	 p1=make_player(30,1,0,p1.life)
+	 p2=make_player(90,3,enemy_reaction,enemy_life)
   p2.col=p2.pall[flr(rnd(#p2.pall))+1]
   init_combat()
 end
 
 function check_result(a,b)
-  local combat_end=false
+ local combat_end=false
   
-  -- a wins
-  if a.t<=b.reaction then
-    b.life-=1
-    sfx(4)
-  -- b wins
-  else
-    a.life-=1
-    sfx(4)
-  end
+	-- if was a fault
+	if not can_attack then
+		a.life-=1
+	-- if was a valid attack
+	else
+	 -- a wins
+		if a.t<=b.reaction then
+ 	 b.life-=1
+   sfx(4)
+ 	-- b wins
+ 	else
+ 	 a.life-=1
+   sfx(4)
+ 	end
+ end
 
-  -- a is dead
-  if a.life<=0 then
-    combat_end=true
-    a.sp=a.sp_dead
-  else
-    a.sp=a.sp_idle
-    a.flip=not a.flip
-  end
+ -- a is dead
+ if a.life<=0 then
+	 combat_end=true
+  a.sp=a.sp_dead
+ else
+	 a.sp=a.sp_idle
+ 	if can_attack then
+ 	 a.flip=not a.flip
+ 	end
+ end
 
   -- b is dead
-  if b.life<=0 then
-    b.sp=b.sp_dead
-    combat_end=true
-    defeated+=1
-  else
-    b.sp=b.sp_idle
-    b.flip=not b.flip
-  end
+ if b.life<=0 then
+	 b.sp=b.sp_dead
+  combat_end=true
+  defeated+=1
+ else
+  b.sp=b.sp_idle
+  if can_attack then
+ 	 b.flip=not b.flip
+ 	end
+ end
 
-  return combat_end
+ return combat_end
 end
 
 -- timers
@@ -360,6 +366,8 @@ msg={}
 msg.start="press ❎ to start"
 msg.wait="wait..."
 msg.attack="attack!"
+msg.fault="fault!"
+msg.reaction="reaction\ntime:"
 msg.reset="press 🅾️ to restart"
 msg.continue="press ❎ to continue"
 msg.gameover="-- game over --"
