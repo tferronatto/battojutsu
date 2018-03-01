@@ -14,10 +14,20 @@ states.gameover={}
 
 function _init()
 	state="menu"
- defeated=0
  for k,v in pairs(states) do
  	v:init()
- end 
+ end
+
+ clouds=init_clouds(2)
+ flash=0
+ enemy_life=1
+ enemy_reaction=30
+ p1=make_player(30,1,1,5)
+ p2=make_player(90,3,enemy_reaction,enemy_life)
+ music(0)
+ defeated=0
+ wait_time=load_wait_timer(240)
+ can_attack=false
 end
 
 function _update60()
@@ -28,7 +38,14 @@ end
 function _draw()
 	cls()
 	draw_bg()
-	draw_clouds()
+	draw_clouds(clouds)
+	if state != "menu" then
+		draw_player(p1)
+		draw_player(p2)
+		if state != "gameover" then
+			draw_ui(ui_text)
+		end
+	end
  states[state]:draw()
 end
 
@@ -41,19 +58,12 @@ end
 -->8
 -- title screen/menu --
 function states.menu:init()
- self.next_state="play"
- clouds=init_clouds(2)
- flash=0
- enemy_life=1
- enemy_reaction=30
- p1=make_player(30,1,1,5)
- p2=make_player(90,3,enemy_reaction,enemy_life)
- music(0)
+	self.next_state="play"
 end
 
 function states.menu:update()
  ui_text=msg.start
- if btnp(5) then
+ if btnp(❎) then
 	 music(-1,2000)
   update_state()
  end
@@ -69,8 +79,6 @@ end
 -- play state --
 function states.play:init()
 	self.next_state="result"
- wait_time=load_wait_timer(240)
- can_attack=false
 end
 
 function states.play:update()
@@ -102,22 +110,15 @@ function states.play:update()
 end
 
 function states.play:draw()
- draw_player(p1)
- draw_player(p2)
- 
  if can_attack then
 	 spr(6,60,57,1,2)
   print("❎",p1.x,p1.y-7,1)
  end
-  
- draw_lifebars()
- draw_msgbox()
- print(ui_text,92,112,7)
 end
 -->8
 -- result state --
 function states.result:init()
- self.next_state="gameover"
+	self.next_state="gameover"
 end
 
 function states.result:update()
@@ -146,31 +147,24 @@ function states.result:update()
    init_combat()
   end
  end
+ 
+ if can_attack then
+ 	ui_text=msg.reaction
+	else
+		ui_text=msg.fault
+	end
 end
 
 function states.result:draw()
  if flash>0 then
 	 cls(7)
 	 spr(5,60,76)
- else
-	 draw_player(p1)
-  draw_player(p2)
-
-  draw_lifebars()
-  draw_msgbox()
-  
-  if can_attack then
- 	 print(msg.reaction,88,105,7)
-  	print(flr(p1.t*16.67).."ms",93,117,7)
-  else
-  	print(msg.fault,92,112,7)
-  end
  end
 end
 -->8
 -- game over/continue state-- 
-function  states.gameover:init()
- self.next_state="menu"
+function states.gameover:init()
+	self.next_state="menu"
 end
 
 function states.gameover:update()
@@ -190,10 +184,7 @@ function states.gameover:update()
 end
 
 function states.gameover:draw()
-	draw_player(p1)
- draw_player(p2)
-
-	if p1.life<=0 then
+		if p1.life<=0 then
  	print(msg.gameover,hcenter(msg.gameover),54,1)
   print(msg.score..defeated,hcenter(msg.score)-4,60,1)
  end
@@ -251,14 +242,15 @@ function check_result(a,b)
 	-- if was a fault
 	if not can_attack then
 		a.life-=1
+		sfx(4)
 	-- if was a valid attack
 	else
 	 -- a wins
-		if a.t<=b.reaction then
+		if a.t<b.reaction then
  	 b.life-=1
    sfx(4)
  	-- b wins
- 	else
+ 	elseif b.reaction>a.t then
  	 a.life-=1
    sfx(4)
  	end
@@ -347,7 +339,7 @@ function make_cloud(x,y)
   local c={}
   c.x=x
   c.y=y
-  c.dx=0.1
+  c.dx=0.05
   c.w=5
   c.h=2
   return c
@@ -374,7 +366,18 @@ msg.gameover="-- game over --"
 msg.score="enemies defeated:"
 
 function hcenter(s)
-  return 64-#s*2
+ return 64-#s*2
+end
+
+function draw_ui(txt)
+	draw_lifebars()
+	draw_msgbox(80,102,40,18)
+	if txt==msg.reaction then
+		print(txt,88,106,7)
+		print(flr(p1.t*16.67).."ms",93,118,7)
+	else
+		print(txt,88,112,7)
+	end 
 end
 
 function draw_lifebars()
@@ -388,11 +391,11 @@ function draw_lifebars()
   end
 end
 
-function draw_msgbox()
-  spr(7,80,102)
-  spr(8,119,102)
-  spr(23,80,119)
-  spr(24,119,119)
+function draw_msgbox(x,y,w,h)
+  spr(7,x,y)
+  spr(8,x+w,y)
+  spr(23,x,y+h)
+  spr(24,x+w,y+h)
 end
 __gfx__
 000000000001111011110006011110006000111100a00a0000088881777770000007777700000000000000000000000777777000000000000000000000000000
@@ -562,7 +565,7 @@ __sfx__
 01100020000000000002140021250e110021400212002115021400212002115021400212002110021450e11002140021200211002145021200e11002145021200e11002140021250e110021400e115021400e012
 010800003c2313c2313c2313c2213c2213c2213c2253c2153c2153c2153c2153c215002023c200002003c20000202002020020200202002020020200202002020020200202002020020200202002020020200202
 011c00000063300603006030060300603006030060300603006030060300603006030060300603006030060300603006030060300603006030060300603006030060300603006030060300603006030060300603
-011000000c75300703007030070300703007030070300703007030070300703007030070300703007030070300703007030070300703007030070300703007030070300703007030070300703007030070300703
+011000001375300703007030070300703007030070300703007030070300703007030070300703007030070300703007030070300703007030070300703007030070300703007030070300703007030000000000
 010c0000186113c635352003520034200002000020000200002000020000200002000020000200002000020000200002000020000200002000020000200002000020000200002000020000200002000020000000
 __music__
 03 00014344
