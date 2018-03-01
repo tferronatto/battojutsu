@@ -22,10 +22,11 @@ function _init()
  flash=0
  enemy_life=1
  enemy_reaction=30
- p1=make_player(30,1,1,5)
- p2=make_player(90,3,enemy_reaction,enemy_life)
+ p1=make_player(30,58,1,5)
+ p2=make_player(90,62,3,enemy_life,enemy_reaction)
+ p1_wins=0
+ p2_wins=0
  music(0)
- defeated=0
  wait_time=load_wait_timer(240)
  can_attack=false
 end
@@ -59,12 +60,21 @@ end
 -- title screen/menu --
 function states.menu:init()
 	self.next_state="play"
+	sel=1
 end
 
 function states.menu:update()
  ui_text=msg.start
- if btnp(❎) then
+ 
+ if check_btnp(⬆️) then sel=1 end
+ if check_btnp(⬇️) then sel=2 end
+ if check_btnp(❎) 
+ or check_btnp(🅾️) then
 	 music(-1,2000)
+	 if sel==2 then
+	 	p1.life=3
+	 	p2.life=3
+	 end
   update_state()
  end
 end
@@ -73,7 +83,9 @@ function states.menu:draw()
 	spr(32,8,46,14,2)
  spr(16,60,76)
  print("a quickdraw sword duel",22,64,1)
- print(ui_text,hcenter(ui_text),112,7)
+ print("1 player",50,108,7)
+ print("2 players",50,116,7)
+ spr(18,42,100+8*sel)
 end
 -->8
 -- play state --
@@ -82,16 +94,33 @@ function states.play:init()
 end
 
 function states.play:update()
-	if btnp(❎) or p1.t>p2.reaction then
+	p1.go=btnp(❎,0) or btnp(🅾️,0)
+	
+	if sel==2 then
+		p2.go=btnp(❎,1) or btnp(🅾️,1)
+	else
+		p2.go=p2.t>=p2.reaction
+	end
+
+	if p1.go or p2.go then
 		if can_attack then
 			flash=3
 			p1.sp=p1.sp_attack
 			p2.sp=p2.sp_attack
-			swap_position(p1,p2)
+			if p1.go and p2.go then
+				clash(p1,p2)
+			else
+				swap_position(p1,p2)
+			end
 			sfx(2)
 			wait_time=240
 		else
-			p1.sp=p1.sp_dead
+			if p1.go then
+			 p1.sp=p1.sp_dead
+			end
+			if p2.go then
+				p2.sp=p2.sp_dead
+			end
 			wait_time=60
 			sfx(3)	
 		end
@@ -105,6 +134,7 @@ function states.play:update()
 	else
 		can_attack=true
 		p1.t+=1
+		p2.t+=1
 		ui_text=msg.attack
 	end
 end
@@ -113,6 +143,9 @@ function states.play:draw()
  if can_attack then
 	 spr(6,60,57,1,2)
   print("❎",p1.x,p1.y-7,1)
+  if sel==2 then
+  	print("❎",p2.x,p2.y-7,8)
+  end
  end
 end
 -->8
@@ -149,7 +182,11 @@ function states.result:update()
  end
  
  if can_attack then
- 	ui_text=msg.reaction
+ 	if p1.go and p2.go then
+ 		ui_text=msg.tie
+ 	else
+ 		ui_text=msg.reaction
+ 	end
 	else
 		ui_text=msg.fault
 	end
@@ -168,15 +205,15 @@ function states.gameover:init()
 end
 
 function states.gameover:update()
- if p1.life>0 then
+ if p1.life>0 and sel==1 then
 	 ui_text=msg.continue
-  if btnp(5) then
+  if btnp(❎) then
  	 next_combat()
    music(-1,2000)
    state="play"
   end
  else
-	 if btnp(4) then
+	 if check_btnp(🅾️) then
  	 _init()
 	 end
   ui_text=msg.reset
@@ -184,28 +221,39 @@ function states.gameover:update()
 end
 
 function states.gameover:draw()
-		if p1.life<=0 then
- 	print(msg.gameover,hcenter(msg.gameover),54,1)
-  print(msg.score..defeated,hcenter(msg.score)-4,60,1)
+	local txt=""
+	if sel==2 then
+		if p1.life>p2.life then
+			txt="player 1 wins!"
+		else
+		 txt="player 2 wins!"
+		end
+		print(txt,hcenter(txt),60,1)
+	elseif p1.life<=0 then
+		print(msg.gameover,hcenter(msg.gameover),54,1)
+ 	print(msg.score..p1_wins,hcenter(msg.score)-4,60,1)
  end
-  print(ui_text,hcenter(ui_text),110,7)
+ print(ui_text,hcenter(ui_text),110,7)
 end
 -->8
 --player control --
-function make_player(x,sp,t,life)
+function make_player(x0,x1,sp,life,t)
  local p={}
-	 p.x=x
+	 p.x=x0
+	 p.x0=x0
+	 p.x1=x1
   p.y=76
-  p.sp_idle=sp
-  p.sp_attack=sp+1
-  p.sp_dead=sp+16
-  p.sp=p.sp_idle
   p.t=0
   p.flip=false
   p.reaction=t or nil
   p.life=life or 1
+  p.go=false
   p.col=8
   p.pall={8,10,3,13,14}
+  p.sp_idle=sp
+  p.sp_attack=sp+1
+  p.sp_dead=sp+16
+  p.sp=p.sp_idle
  return p
 end
 
@@ -219,21 +267,48 @@ function swap_position(a,b)
  local pos1,pos2=a.x,b.x
  a.x=pos2
  b.x=pos1
+ pos1,pos2=a.x0,b.x0
+ a.x0=pos2
+ b.x0=pos1
+ pos1,pos2=a.x1,b.x1
+ a.x1=pos2
+ b.x1=pos1
+end
+
+function clash(a,b)
+	a.x=a.x1
+	b.x=b.x1
+end
+
+function return_pos(a,b)
+	a.x=a.x0
+	b.x=b.x0
 end
 
 function init_combat()
  can_attack=false
+ if p1.x==p1.x1 then
+ 	return_pos(p1,p2)
+ end
  wait_time=load_wait_timer(240)
  p1.t=0
+ p2.t=0
+ p1.go=false
+ p2.go=false
 end
 
 function next_combat()
  enemy_reaction-=1
- if enemy_life<6 then enemy_life+=1 end
-	 p1=make_player(30,1,0,p1.life)
-	 p2=make_player(90,3,enemy_reaction,enemy_life)
-  p2.col=p2.pall[flr(rnd(#p2.pall))+1]
-  init_combat()
+ if enemy_life<6 then
+  enemy_life+=1
+ end
+ if p1.life<6 and p1_wins%2==0 then
+ 	p1.life+=1
+ end
+ p1=make_player(30,58,1,p1.life)
+ p2=make_player(90,62,3,enemy_life,enemy_reaction)
+ p2.col=p2.pall[flr(rnd(#p2.pall))+1]
+ init_combat()
 end
 
 function check_result(a,b)
@@ -241,16 +316,17 @@ function check_result(a,b)
   
 	-- if was a fault
 	if not can_attack then
-		a.life-=1
+		if a.go then	a.life-=1 end
+		if b.go then b.life-=1 end
 		sfx(4)
 	-- if was a valid attack
 	else
 	 -- a wins
-		if a.t<b.reaction then
+		if a.go and not b.go then
  	 b.life-=1
    sfx(4)
  	-- b wins
- 	elseif b.reaction>a.t then
+ 	elseif b.go and not a.go then
  	 a.life-=1
    sfx(4)
  	end
@@ -260,9 +336,10 @@ function check_result(a,b)
  if a.life<=0 then
 	 combat_end=true
   a.sp=a.sp_dead
+  p2_wins+=1
  else
 	 a.sp=a.sp_idle
- 	if can_attack then
+ 	if can_attack and a.go!=b.go then
  	 a.flip=not a.flip
  	end
  end
@@ -271,10 +348,10 @@ function check_result(a,b)
  if b.life<=0 then
 	 b.sp=b.sp_dead
   combat_end=true
-  defeated+=1
+  p1_wins+=1
  else
   b.sp=b.sp_idle
-  if can_attack then
+  if can_attack and b.go!=a.go then
  	 b.flip=not b.flip
  	end
  end
@@ -351,14 +428,14 @@ function draw_clouds(c)
   end
 end
 -->8
--- text/ui utils -- 
-result_txt=""
+-- text/ui utils 
 ui_text="not defined"
 msg={}
 msg.start="press ❎ to start"
 msg.wait="wait..."
 msg.attack="attack!"
 msg.fault="fault!"
+msg.tie="tie!"
 msg.reaction="reaction\ntime:"
 msg.reset="press 🅾️ to restart"
 msg.continue="press ❎ to continue"
@@ -397,6 +474,10 @@ function draw_msgbox(x,y,w,h)
   spr(23,x,y+h)
   spr(24,x+w,y+h)
 end
+
+function check_btnp(b)
+	return btnp(b,0) or btnp(b,1)
+end
 __gfx__
 000000000001111011110006011110006000111100a00a0000088881777770000007777700000000000000000000000777777000000000000000000000000000
 0000000000001ff001ff00060ff100006000ff1009a00a9000888881711110000001111700000000000000000000077777777770000000000000000000000000
@@ -406,11 +487,11 @@ __gfx__
 007007006666ccc00cf960000888666600069f80aa9009aa00888100000000000000000000000000007777777777777777777777770077700000000000000000
 00000000000cc0cc0cccc000880880000008888009a00a9000888100000000000000000000000000077777777777777777777777777777777000000000000000
 00000000000f000fcf00f000f000f000000f00f800a00a0000888100000000000000000000000000777777777777777777777777777777777700000000000000
-0000000000000000000000000000000077777770eeeeeee008881000000000000000000000000000777777777777777777777777777777777770000000000000
-00000000000000000000000000000000ccccccc18888888108881000000000000000000000000000f777777777f7777777777777777777777777000000000000
-00090000000000900000000009000000ccccccc18888888100000000000000000000000000000000f77777777fff7777777777777f7777777777000000000000
-00060000000000600000000006000000ccccccc18888888108881000700000000000000700000000ff77777fffffff7777777777fff77777777f000000000000
-00006000000000060000000060000000ddddddd022222220888810007000000000000007000000000fffffffffffffffffff777ffff777777ff0000000000000
+0000000000000000007000000000000077777770eeeeeee008881000000000000000000000000000777777777777777777777777777777777770000000000000
+00000000000000000077000000000000ccccccc18888888108881000000000000000000000000000f777777777f7777777777777777777777777000000000000
+00090000000000900077700009000000ccccccc18888888100000000000000000000000000000000f77777777fff7777777777777f7777777777000000000000
+00060000000000600077000006000000ccccccc18888888108881000700000000000000700000000ff77777fffffff7777777777fff77777777f000000000000
+00006000000000060070000060000000ddddddd022222220888810007000000000000007000000000fffffffffffffffffff777ffff777777ff0000000000000
 0000600000000106000000006010000000000000000000008888100070000000000000070000000000fffffff000fffffffffffffffff777ff00000000000000
 0000600000cc110600000000601188000000000000000000888100007777000000007777000000000000fff000000ffffffffff0000ffffff000000000000000
 00006000fcccccf6000000006f88888f000000000000000000000000111100000000111100000000000000000000000ffffff0000000ffff0000000000000000
